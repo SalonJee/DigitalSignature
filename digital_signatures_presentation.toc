@@ -1,0 +1,6 @@
+\beamer@sectionintoc {1}{Motivation}{3}{0}{1}
+\beamer@sectionintoc {2}{Number Theory Toolkit}{4}{0}{2}
+\beamer@sectionintoc {3}{RSA Signatures}{7}{0}{3}
+\beamer@sectionintoc {4}{Discrete-Log Signatures}{11}{0}{4}
+\beamer@sectionintoc {5}{Applications}{13}{0}{5}
+\beamer@sectionintoc {6}{Conclusion}{14}{0}{6}

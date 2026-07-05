@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>RSA Digital Signature — Live Demo</title>
+<style>
+  :root{
+    --bg:#0f1220; --panel:#171b2e; --accent:#5b8cff; --accent2:#37d6a5;
+    --danger:#ff5b6e; --text:#e8eaf3; --muted:#8b90ad; --border:#2a2f4a;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; font-family:'Segoe UI', Roboto, Arial, sans-serif; background:var(--bg);
+    color:var(--text); padding:24px;
+  }
+  h1{font-size:22px; margin:0 0 4px 0;}
+  .sub{color:var(--muted); margin-bottom:20px; font-size:14px;}
+  .grid{display:grid; grid-template-columns:1fr 1fr; gap:18px;}
+  @media (max-width:850px){ .grid{grid-template-columns:1fr;} }
+  .card{
+    background:var(--panel); border:1px solid var(--border); border-radius:12px;
+    padding:18px 20px;
+  }
+  .card h2{font-size:15px; margin:0 0 12px 0; color:var(--accent2); letter-spacing:0.3px;}
+  label{display:block; font-size:13px; color:var(--muted); margin:10px 0 4px;}
+  input[type=number], input[type=text]{
+    width:100%; padding:8px 10px; border-radius:8px; border:1px solid var(--border);
+    background:#10142400; background:#0c0f1c; color:var(--text); font-size:14px;
+  }
+  .row{display:flex; gap:10px;}
+  .row > div{flex:1;}
+  button{
+    cursor:pointer; border:none; border-radius:8px; padding:9px 14px; font-size:13px;
+    font-weight:600; margin-top:12px; margin-right:8px;
+  }
+  .btn-primary{background:var(--accent); color:white;}
+  .btn-secondary{background:#2a2f4a; color:var(--text);}
+  .btn-danger{background:var(--danger); color:white;}
+  .mono{font-family:'Consolas','Courier New',monospace; font-size:13px; word-break:break-all;}
+  .kv{display:flex; justify-content:space-between; padding:6px 0; border-bottom:1px dashed var(--border); font-size:14px;}
+  .kv:last-child{border-bottom:none;}
+  .kv .k{color:var(--muted);}
+  .kv .v{font-family:'Consolas','Courier New',monospace; color:var(--text);}
+  .status{
+    margin-top:14px; padding:10px 12px; border-radius:8px; font-weight:600; font-size:14px;
+    display:none;
+  }
+  .status.ok{background:rgba(55,214,165,0.15); color:var(--accent2); display:block; border:1px solid var(--accent2);}
+  .status.bad{background:rgba(255,91,110,0.15); color:var(--danger); display:block; border:1px solid var(--danger);}
+  .steps{
+    margin-top:10px; max-height:160px; overflow-y:auto; font-family:'Consolas','Courier New',monospace;
+    font-size:12px; color:var(--muted); background:#0c0f1c; border-radius:8px; padding:10px;
+    border:1px solid var(--border);
+  }
+  .err{color:var(--danger); font-size:13px; margin-top:8px;}
+  .badge{
+    display:inline-block; padding:2px 8px; border-radius:20px; font-size:11px; font-weight:700;
+    background:var(--accent); color:white; margin-left:6px;
+  }
+  .footer-note{margin-top:18px; font-size:12px; color:var(--muted); text-align:center;}
+</style>
+</head>
+<body>
+
+<h1>🔐 RSA Digital Signature — Live Demo</h1>
+<div class="sub">Pick primes, sign a message, verify it, then try tampering. Every operation shows its number-theoretic step below.</div>
+
+<div class="grid">
+
+  <!-- KEY GENERATION -->
+  <div class="card">
+    <h2>1 · Key Generation</h2>
+    <div class="row">
+      <div>
+        <label>Prime p</label>
+        <input type="number" id="pInput" value="61">
+      </div>
+      <div>
+        <label>Prime q</label>
+        <input type="number" id="qInput" value="53">
+      </div>
+    </div>
+    <button class="btn-primary" onclick="generateKeys()">Generate Keys</button>
+    <button class="btn-secondary" onclick="randomPrimes()">Random Small Primes</button>
+    <div id="keyError" class="err"></div>
+    <div id="keyOutput" style="margin-top:12px;"></div>
+  </div>
+
+  <!-- SIGN -->
+  <div class="card">
+    <h2>2 · Sign a Message <span class="badge">private key</span></h2>
+    <label>Message m (a number smaller than n)</label>
+    <input type="number" id="msgInput" value="65">
+    <button class="btn-primary" onclick="signMessage()">Sign</button>
+    <div id="signError" class="err"></div>
+    <div id="signOutput" style="margin-top:12px;"></div>
+    <div id="signSteps" class="steps" style="display:none;"></div>
+  </div>
+
+  <!-- VERIFY -->
+  <div class="card">
+    <h2>3 · Verify Signature <span class="badge">public key</span></h2>
+    <label>Message m'</label>
+    <input type="number" id="verifyMsgInput">
+    <label>Signature σ</label>
+    <input type="number" id="verifySigInput">
+    <button class="btn-primary" onclick="verifySignature()">Verify</button>
+    <button class="btn-danger" onclick="tamperMessage()">Tamper Message (+1)</button>
+    <div id="verifyStatus" class="status"></div>
+    <div id="verifySteps" class="steps" style="display:none;"></div>
+  </div>
+
+  <!-- EXPLANATION -->
+  <div class="card">
+    <h2>Why It Works</h2>
+    <div class="kv"><span class="k">Sign</span><span class="v">σ = m^d mod n</span></div>
+    <div class="kv"><span class="k">Verify</span><span class="v">σ^e mod n =? m</span></div>
+    <div class="kv"><span class="k">Correctness</span><span class="v">Euler: m^φ(n) ≡ 1 (mod n)</span></div>
+    <p style="font-size:13px; color:var(--muted); margin-top:12px; line-height:1.5;">
+      Because <span class="mono">e·d ≡ 1 (mod φ(n))</span>, raising m to the d-th power and then
+      to the e-th power is a full trip around the group of order φ(n), landing back on m.
+      Changing even one digit of m or σ breaks this identity — that's why tampering is caught.
+    </p>
+  </div>
+
+</div>
+
+<div class="footer-note">Uses small primes for hand-checkable arithmetic — real RSA uses primes hundreds of digits long.</div>
+
+<script>
+let state = { p:0, q:0, n:0, phi:0, e:0, d:0, ready:false };
+
+function gcd(a,b){ while(b){ [a,b]=[b, a % b]; } return a; }
+
+function isPrime(n){
+  if(n<2) return false;
+  for(let i=2;i*i<=n;i++){ if(n%i===0) return false; }
+  return true;
+}
+
+// modular exponentiation via repeated squaring, returns {result, steps}
+function modPow(base, exp, mod){
+  let result = 1n;
+  base = BigInt(base) % BigInt(mod);
+  let e = BigInt(exp);
+  const m = BigInt(mod);
+  let steps = [];
+  let b = base;
+  let sq = 0;
+  while(e > 0n){
+    if(e % 2n === 1n){
+      result = (result * b) % m;
+    }
+    steps.push(`step ${++sq}: exponent bit -> result=${result}, base=${b}`);
+    b = (b*b) % m;
+    e = e / 2n;
+  }
+  return { result: result, steps: steps };
+}
+
+// extended euclid: returns [g, x, y] such that a*x + b*y = g
+function extGCD(a,b){
+  if(b === 0n) return [a, 1n, 0n];
+  let [g, x1, y1] = extGCD(b, a % b);
+  return [g, y1, x1 - (a/b)*y1];
+}
+
+function modInverse(e, phi){
+  e = BigInt(e); phi = BigInt(phi);
+  let [g, x, y] = extGCD(e, phi);
+  if(g !== 1n) return null;
+  let inv = ((x % phi) + phi) % phi;
+  return inv;
+}
+
+function randomPrimes(){
+  const smallPrimes = [11,13,17,19,23,29,31,37,41,43,47,53,59,61,67,71,73,79,83,89,97];
+  let p = smallPrimes[Math.floor(Math.random()*smallPrimes.length)];
+  let q = smallPrimes[Math.floor(Math.random()*smallPrimes.length)];
+  while(q === p){ q = smallPrimes[Math.floor(Math.random()*smallPrimes.length)]; }
+  document.getElementById('pInput').value = p;
+  document.getElementById('qInput').value = q;
+  generateKeys();
+}
+
+function generateKeys(){
+  const errEl = document.getElementById('keyError');
+  const outEl = document.getElementById('keyOutput');
+  errEl.textContent = '';
+  outEl.innerHTML = '';
+
+  const p = parseInt(document.getElementById('pInput').value);
+  const q = parseInt(document.getElementById('qInput').value);
+
+  if(!isPrime(p) || !isPrime(q)){
+    errEl.textContent = 'Both p and q must be prime numbers.';
+    state.ready = false;
+    return;
+  }
+  if(p === q){
+    errEl.textContent = 'p and q must be different primes.';
+    state.ready = false;
+    return;
+  }
+
+  const n = p*q;
+  const phi = (p-1)*(q-1);
+
+  // find a valid e
+  let e = 17;
+  if(gcd(e, phi) !== 1){
+    e = 3;
+    while(gcd(e, phi) !== 1 && e < phi){ e += 2; }
+  }
+
+  const d = modInverse(e, phi);
+  if(d === null){
+    errEl.textContent = 'Could not find modular inverse — try different primes.';
+    return;
+  }
+
+  state = { p, q, n, phi, e, d: Number(d), ready: true };
+
+  outEl.innerHTML = `
+    <div class="kv"><span class="k">n = p·q</span><span class="v">${n}</span></div>
+    <div class="kv"><span class="k">φ(n) = (p-1)(q-1)</span><span class="v">${phi}</span></div>
+    <div class="kv"><span class="k">public e</span><span class="v">${e}</span></div>
+    <div class="kv"><span class="k">private d</span><span class="v">${d}</span></div>
+    <div class="kv"><span class="k">Public Key</span><span class="v">(n=${n}, e=${e})</span></div>
+    <div class="kv"><span class="k">Private Key</span><span class="v">d=${d}</span></div>
+  `;
+
+  // reset downstream fields
+  document.getElementById('verifyMsgInput').value = '';
+  document.getElementById('verifySigInput').value = '';
+  document.getElementById('verifyStatus').className = 'status';
+  document.getElementById('signOutput').innerHTML = '';
+  document.getElementById('signSteps').style.display = 'none';
+}
+
+function signMessage(){
+  const errEl = document.getElementById('signError');
+  const outEl = document.getElementById('signOutput');
+  const stepsEl = document.getElementById('signSteps');
+  errEl.textContent = '';
+  outEl.innerHTML = '';
+  stepsEl.style.display = 'none';
+
+  if(!state.ready){
+    errEl.textContent = 'Generate keys first.';
+    return;
+  }
+  const m = parseInt(document.getElementById('msgInput').value);
+  if(isNaN(m) || m < 0 || m >= state.n){
+    errEl.textContent = `Message must be a number between 0 and ${state.n - 1}.`;
+    return;
+  }
+
+  const { result, steps } = modPow(m, state.d, state.n);
+  outEl.innerHTML = `
+    <div class="kv"><span class="k">σ = m^d mod n</span><span class="v">${m}^${state.d} mod ${state.n}</span></div>
+    <div class="kv"><span class="k">Signature σ</span><span class="v">${result}</span></div>
+  `;
+  stepsEl.style.display = 'block';
+  stepsEl.innerHTML = steps.join('<br>');
+
+  document.getElementById('verifyMsgInput').value = m;
+  document.getElementById('verifySigInput').value = result.toString();
+}
+
+function verifySignature(){
+  const statusEl = document.getElementById('verifyStatus');
+  const stepsEl = document.getElementById('verifySteps');
+  statusEl.className = 'status';
+  stepsEl.style.display = 'none';
+
+  if(!state.ready){
+    statusEl.className = 'status bad';
+    statusEl.textContent = 'Generate keys first.';
+    return;
+  }
+  const m = parseInt(document.getElementById('verifyMsgInput').value);
+  const sig = document.getElementById('verifySigInput').value;
+  if(isNaN(m) || sig === ''){
+    statusEl.className = 'status bad';
+    statusEl.textContent = 'Enter both a message and a signature.';
+    return;
+  }
+
+  const { result, steps } = modPow(BigInt(sig), state.e, state.n);
+  stepsEl.style.display = 'block';
+  stepsEl.innerHTML = steps.join('<br>');
+
+  if(result.toString() === m.toString()){
+    statusEl.className = 'status ok';
+    statusEl.textContent = `✓ Valid signature — σ^e mod n = ${result} = m. Message is authentic.`;
+  } else {
+    statusEl.className = 'status bad';
+    statusEl.textContent = `✗ Invalid signature — σ^e mod n = ${result} ≠ ${m}. Rejected!`;
+  }
+}
+
+function tamperMessage(){
+  const el = document.getElementById('verifyMsgInput');
+  const current = parseInt(el.value);
+  if(!isNaN(current)){
+    el.value = current + 1;
+    verifySignature();
+  }
+}
+
+// initialize with the example from the report/slides
+generateKeys();
+</script>
+
+</body>
+</html>
