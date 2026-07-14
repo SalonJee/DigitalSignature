@@ -1,231 +1,243 @@
 \documentclass[aspectratio=169]{beamer}
 
-\usetheme{Madrid}
-\usecolortheme{default}
+% ---------- Theme: Metropolis (dark, cyberpunk-crypto palette) ----------
+\usetheme[background=dark, block=fill, progressbar=frametitle, numbering=fraction]{metropolis}
 \setbeamertemplate{navigation symbols}{}
-\setbeamertemplate{footline}[frame number]
 
+% Recolor the metropolis palette -- deep space navy + electric cyan accent
+\definecolor{mDarkTeal}{HTML}{0B1622}   % background
+\definecolor{mLightBrown}{HTML}{00E5FF} % accent: alerted text / progress bar
+\definecolor{mLightGreen}{HTML}{6BFFB8} % accent: example text
+\definecolor{mDarkBrown}{HTML}{132433}  % secondary panel tone
+
+\setbeamercolor{block title}{bg=mDarkTeal!60!black, fg=mLightBrown}
+\setbeamercolor{block body}{bg=mDarkTeal!40!black}
+
+% ---------- Packages ----------
+\usepackage[utf8]{inputenc}
 \usepackage{amsmath,amssymb}
 \usepackage{tikz}
-\usetikzlibrary{arrows.meta,positioning,decorations.pathreplacing}
+\usetikzlibrary{arrows.meta,positioning,shapes.geometric,calc}
 \usepackage{booktabs}
-\usepackage{xcolor}
+\usepackage{listings}
 
 \title[Digital Signatures]{Digital Signatures}
-\subtitle{Number-Theoretic Foundations and Applications}
+\subtitle{Concepts, RSA and ElGamal Schemes}
 \author{}
 \date{\today}
 
 \begin{document}
 
-\frame{\titlepage}
+% ---------------- Title ----------------
+\begin{frame}
+  \titlepage
+\end{frame}
 
+% ---------------- Outline ----------------
 \begin{frame}{Outline}
-\tableofcontents
+  \tableofcontents
 \end{frame}
 
-%================================================
-\section{Motivation}
-%================================================
-\begin{frame}{What Problem Are We Solving?}
-\begin{block}{Goal}
-Given a message $m$ and a private key, produce $\sigma$ such that \emph{anyone} with the public key can confirm:
-\end{block}
-\begin{itemize}
-    \item \textbf{Authenticity} --- only the key owner could have produced $\sigma$
-    \item \textbf{Integrity} --- any change to $m$ breaks verification
-    \item \textbf{Non-repudiation} --- the signer can't later deny it
-\end{itemize}
-\vspace{0.3cm}
-\centering
-\begin{tikzpicture}[node distance=1.6cm, >=Stealth]
-\node[draw, rounded corners, fill=blue!10] (m) {Message $m$};
-\node[draw, rounded corners, fill=orange!15, right=2.2cm of m] (sign) {Sign w/ private key};
-\node[draw, rounded corners, fill=green!15, right=2.2cm of sign] (sig) {$(m,\sigma)$};
-\draw[->] (m) -- (sign);
-\draw[->] (sign) -- (sig);
-\end{tikzpicture}
+% =====================================================
+\section{Introduction}
+% =====================================================
+\begin{frame}{Introduction to Digital Signatures}
+  \begin{itemize}
+    \item A \textbf{digital signature} is a cryptographic mechanism used to verify the \textbf{authenticity} and \textbf{integrity} of a digital message or document.
+    \item It is the electronic analogue of a handwritten signature, but far more secure.
+    \item Based on \textbf{public-key (asymmetric) cryptography}: a \emph{private key} to sign, a \emph{public key} to verify.
+    \item Provides three key security properties:
+    \begin{itemize}
+      \item \textbf{Authentication} -- confirms the identity of the sender.
+      \item \textbf{Integrity} -- ensures the message was not altered.
+      \item \textbf{Non-repudiation} -- sender cannot deny having signed the message.
+    \end{itemize}
+  \end{itemize}
 \end{frame}
 
-%================================================
-\section{Number Theory Toolkit}
-%================================================
-\begin{frame}{The Group $\mathbb{Z}_n^*$}
-\begin{itemize}
-    \item $\mathbb{Z}_n^* = \{a \in \{0,\dots,n-1\} : \gcd(a,n)=1\}$
-    \item Forms a group under multiplication mod $n$, order $\varphi(n)$
-    \item If $n = p$ prime: $\varphi(p) = p-1$
-    \item If $n = pq$, distinct primes: $\varphi(n) = (p-1)(q-1)$
-\end{itemize}
-\vspace{0.3cm}
-\begin{exampleblock}{Why we care}
-This group structure is the entire ``state space'' RSA arithmetic lives in.
-\end{exampleblock}
-\end{frame}
-
-\begin{frame}{Fermat \& Euler: The Two Load-Bearing Theorems}
-\begin{block}{Fermat's Little Theorem}
-$p$ prime, $p \nmid a$ $\implies$ $a^{p-1} \equiv 1 \pmod p$
-\end{block}
-\begin{block}{Euler's Theorem}
-$\gcd(a,n) = 1$ $\implies$ $a^{\varphi(n)} \equiv 1 \pmod n$
-\end{block}
-\vspace{0.2cm}
-\centering{\Large Everything RSA does is exploit this single congruence.}
-\end{frame}
-
-\begin{frame}{Discrete Logarithm Problem}
-\begin{columns}
-\column{0.55\textwidth}
-\begin{itemize}
-    \item Cyclic group $G$, generator $g$, order $q$
-    \item \textbf{Easy}: given $x$, compute $g^x$ (repeated squaring, $O(\log x)$)
-    \item \textbf{Hard}: given $h=g^x$, recover $x$
-    \item No efficient classical algorithm known in $\mathbb{Z}_p^*$ or elliptic curve groups
-\end{itemize}
-\column{0.45\textwidth}
-\centering
-\begin{tikzpicture}[>=Stealth]
-\node at (0,1.4) {\small forward: fast};
-\draw[->, thick, blue] (0,1) -- (0,0.3);
-\node at (0,0) {$x$};
-\node at (0,1.7) {$g^x \bmod p$};
-\draw[->, thick, red, dashed] (0.9,0) .. controls (2,0.6) .. (0.9,1.7);
-\node at (2.3,0.85) {\small \textcolor{red}{backward: hard}};
-\end{tikzpicture}
-\end{columns}
-\end{frame}
-
-%================================================
-\section{RSA Signatures}
-%================================================
-\begin{frame}{RSA: Key Generation}
-\begin{enumerate}
-    \item Pick large primes $p, q$; let $n = pq$
-    \item $\varphi(n) = (p-1)(q-1)$
-    \item Pick $e$ with $\gcd(e,\varphi(n))=1$
-    \item Solve for $d \equiv e^{-1} \pmod{\varphi(n)}$
-\end{enumerate}
-\vspace{0.2cm}
-\begin{alertblock}{Keys}
-Public: $(n,e)$ \hspace{1cm} Private: $d$
-\end{alertblock}
-\end{frame}
-
-\begin{frame}{RSA: Sign and Verify}
-\[
-\textbf{Sign: } \sigma \equiv m^{d} \pmod n
-\qquad\qquad
-\textbf{Verify: } \sigma^{e} \bmod n \stackrel{?}{=} m
-\]
-\vspace{0.4cm}
-\begin{theorem}
-$(m^d)^e \equiv m \pmod n$ for all $m \in \mathbb{Z}_n^*$.
-\end{theorem}
-\textbf{Proof sketch:} $ed = 1 + k\varphi(n)$ for some integer $k$, so
-\[
-(m^d)^e = m^{1+k\varphi(n)} = m \cdot (m^{\varphi(n)})^k \overset{\text{Euler}}{=} m \cdot 1^k = m.
-\]
-\end{frame}
-
-\begin{frame}{RSA: Fully Worked Example}
-\[
-p=61,\ q=53 \;\Rightarrow\; n = 3233,\ \varphi(n) = 3120
-\]
-\[
-e = 17 \;\Rightarrow\; d = 2753 \quad (17\times 2753 = 46801 = 15\times3120+1)
-\]
-\vspace{0.2cm}
-\textbf{Sign $m = 65$:}
-\[
-\sigma = 65^{2753} \bmod 3233 = 2790
-\]
-\textbf{Verify:}
-\[
-2790^{17} \bmod 3233 = 65 \; \checkmark
-\]
-\begin{alertblock}{Tamper test}
-Flip $m \to 66$: verification gives $65 \neq 66$ --- rejected!
-\end{alertblock}
-\end{frame}
-
-\begin{frame}{Live Demo}
-\centering
-\Large
-Let's generate keys, sign, and verify live. \\[0.4cm]
-\normalsize
-Call out two small primes and a message number --- \\
-we'll watch the arithmetic resolve on screen.
-\vspace{0.5cm}
-
-\textit{(Switch to the interactive RSA signature tool now.)}
-\end{frame}
-
-%================================================
-\section{Discrete-Log Signatures}
-%================================================
-\begin{frame}{ElGamal Signatures}
-Public key $y = g^x \bmod p$; private key $x$.
-\vspace{0.2cm}
-\textbf{Sign} (pick random ephemeral $k$, $\gcd(k,p-1)=1$):
-\[
-r = g^k \bmod p, \qquad s = (m - xr)k^{-1} \bmod (p-1)
-\]
-\textbf{Verify:}
-\[
-g^{m} \stackrel{?}{\equiv} y^{r} r^{s} \pmod p
-\]
-\begin{alertblock}{Critical rule}
-Never reuse $k$! Reuse leaks $x$ instantly via linear algebra.
-\end{alertblock}
-\end{frame}
-
-\begin{frame}{DSA and ECDSA}
-\begin{itemize}
-    \item \textbf{DSA}: works in a prime-order subgroup of $\mathbb{Z}_p^*$ $\to$ shorter signatures
-    \item \textbf{ECDSA}: replaces $\mathbb{Z}_p^*$ with points on an elliptic curve $E(\mathbb{F}_p)$
-    \item Same underlying idea: DLP hardness, just in a different group
-\end{itemize}
-\vspace{0.3cm}
-\begin{table}
-\centering
-\begin{tabular}{lcc}
-\toprule
- & 128-bit security & Signature size \\
-\midrule
-RSA & 3072-bit $n$ & large \\
-ECDSA & 256-bit curve & small \\
-\bottomrule
-\end{tabular}
-\end{table}
-\end{frame}
-
-%================================================
+% =====================================================
 \section{Applications}
-%================================================
-\begin{frame}{Where This Shows Up Every Day}
-\begin{itemize}
-    \item \textbf{TLS/HTTPS} --- certificate chains signed by CAs
-    \item \textbf{Code signing} --- OS/app-store update verification
-    \item \textbf{Blockchain} --- every Bitcoin/Ethereum transaction is ECDSA-signed
-    \item \textbf{e-Government \& PDF signing} --- legal non-repudiation
-    \item \textbf{Software supply chain} --- PGP/GPG, Sigstore
-\end{itemize}
+% =====================================================
+\begin{frame}{Applications of Digital Signatures}
+  \begin{columns}
+    \begin{column}{0.5\textwidth}
+      \begin{itemize}
+        \item Secure email (S/MIME, PGP)
+        \item Software / code signing
+        \item Financial transactions \& e-banking
+        \item Legal contracts and e-governance documents
+      \end{itemize}
+    \end{column}
+    \begin{column}{0.5\textwidth}
+      \begin{itemize}
+        \item SSL/TLS certificates for websites
+        \item Blockchain and cryptocurrency transactions
+        \item Electronic tax filing
+        \item Document management systems (PDF signing)
+      \end{itemize}
+    \end{column}
+  \end{columns}
 \end{frame}
 
-%================================================
-\section{Conclusion}
-%================================================
-\begin{frame}{Takeaways}
-\begin{itemize}
-    \item Digital signatures = number theory with a trapdoor
-    \item RSA: security from factoring; correctness from Euler's theorem
-    \item ElGamal/DSA/ECDSA: security from discrete logs
-    \item Elliptic curves buy the same security with far smaller keys
-    \item The math you just saw runs behind every HTTPS padlock and blockchain transaction
-\end{itemize}
-\vspace{0.4cm}
-\centering \Large Questions?
+% =====================================================
+\section{General Flowchart}
+% =====================================================
+\begin{frame}{General Flowchart of Digital Signature Process}
+  \centering
+  \resizebox{0.70\textwidth}{!}{%
+  \begin{tikzpicture}[
+      node distance = 8mm and 12mm,
+      block/.style = {rectangle, draw=mLightBrown, thick, fill=mDarkTeal!55!black,
+                       text=white, rounded corners,
+                       minimum height=8mm, minimum width=28mm, align=center, font=\scriptsize},
+      decision/.style = {diamond, draw=mLightBrown, thick, fill=mDarkBrown,
+                          text=white, aspect=2.4,
+                          align=center, font=\scriptsize, inner sep=1pt},
+      arrow/.style = {-Stealth, thick, mLightBrown},
+      >=Stealth
+  ]
+    % ---------- Sender side (left column) ----------
+    \node[block] (msg) {Original\\Message};
+    \node[block, below=of msg] (hash1) {Hash Function\\(e.g.\ SHA-256)};
+    \node[block, below=of hash1] (sign) {Encrypt Hash with\\Sender's Private Key};
+    \node[block, below=of sign] (sig) {Digital\\Signature};
+
+    % ---------- Transmission ----------
+    \node[block, right=34mm of hash1, fill=mLightGreen!25!mDarkTeal, draw=mLightGreen] (send) {Send Message\\+ Signature};
+
+    % ---------- Receiver side: two parallel branches, side by side ----------
+    \node[decision, below=30mm of send] (comp) {Hashes\\Match?};
+    \node[block, above left=8mm and 4mm of comp] (hash2) {Recompute Hash\\of Received Message};
+    \node[block, above right=8mm and 4mm of comp] (decrypt) {Decrypt Signature\\with Public Key};
+
+    \node[block, below left=12mm and 2mm of comp, fill=green!25!mDarkTeal, draw=green!70!black] (acc) {Signature Valid\\(Accept)};
+    \node[block, below right=12mm and 2mm of comp, fill=red!25!mDarkTeal, draw=red!70!black] (rej) {Signature Invalid\\(Reject)};
+
+    % ---------- Arrows: sender pipeline ----------
+    \draw[arrow] (msg) -- (hash1);
+    \draw[arrow] (hash1) -- (sign);
+    \draw[arrow] (sign) -- (sig);
+
+    % ---------- Arrows: into transmission (bent, non-overlapping) ----------
+    \draw[arrow] (msg.east) -| (send.north);
+    \draw[arrow] (sig.east) -| (send.south);
+
+    % ---------- Arrows: transmission fans out to the two parallel checks ----------
+    \draw[arrow] (send.south) -- (hash2.north);
+    \draw[arrow] (send.east) .. controls +(10mm,0) and +(10mm,6mm) .. (decrypt.north);
+
+    % ---------- Arrows: both checks feed the decision ----------
+    \draw[arrow] (hash2.south) -- (comp.north west);
+    \draw[arrow] (decrypt.south) -- (comp.north east);
+
+    % ---------- Arrows: decision branches ----------
+    \draw[arrow] (comp.south west) -- (acc.north);
+    \draw[arrow] (comp.south east) -- (rej.north);
+  \end{tikzpicture}}
+\end{frame}
+
+% =====================================================
+\section{Workflow}
+% =====================================================
+\begin{frame}{Workflow: How Digital Signatures Work}
+  \textbf{1. Key Generation}
+  \begin{itemize}
+    \item Each user generates a pair of mathematically linked keys: a private key (kept secret) and a public key (shared openly).
+  \end{itemize}
+  \textbf{2. Signing (by Sender)}
+  \begin{itemize}
+    \item Compute a hash (message digest) of the document.
+    \item Encrypt the hash using the sender's \emph{private key} $\rightarrow$ this is the digital signature.
+    \item Send the original message along with the signature.
+  \end{itemize}
+  \textbf{3. Verification (by Receiver)}
+  \begin{itemize}
+    \item Recompute the hash of the received message.
+    \item Decrypt the received signature using the sender's \emph{public key}.
+    \item If both hash values match $\Rightarrow$ signature is \textbf{valid}; otherwise \textbf{invalid / tampered}.
+  \end{itemize}
+\end{frame}
+
+% =====================================================
+\section{RSA Digital Signature}
+% =====================================================
+\begin{frame}{RSA Digital Signature Scheme}
+  \textbf{Key Generation}
+  \begin{enumerate}
+    \item Choose two large primes $p, q$. Compute $n = pq$.
+    \item Compute $\varphi(n) = (p-1)(q-1)$.
+    \item Choose public exponent $e$ such that $1 < e < \varphi(n)$ and $\gcd(e,\varphi(n))=1$.
+    \item Compute private exponent $d \equiv e^{-1} \pmod{\varphi(n)}$.
+    \item Public key: $(n,e)$ \quad Private key: $(n,d)$.
+  \end{enumerate}
+  \textbf{Signing:} \quad $s \equiv m^{d} \pmod{n}$
+
+  \textbf{Verification:} \quad accept if \; $m \equiv s^{e} \pmod{n}$
+\end{frame}
+
+\begin{frame}{RSA Digital Signature -- Small Example}
+  \textbf{Key Generation}
+  \begin{align*}
+    p = 5, \quad q = 11 &\quad\Rightarrow\quad n = pq = 55 \\
+    \varphi(n) &= (p-1)(q-1) = 4 \times 10 = 40 \\
+    e &= 3 \quad (\gcd(3,40)=1) \\
+    d &= e^{-1} \bmod 40 = 27 \quad (\text{since } 3 \times 27 = 81 \equiv 1 \bmod 40)
+  \end{align*}
+  Public key $(n,e) = (55,3)$, \quad Private key $(n,d) = (55,27)$
+
+  \textbf{Signing message} $m = 2$:
+  \[
+    s \equiv m^{d} \pmod n \;=\; 2^{27} \bmod 55 \;=\; 18
+  \]
+
+  \textbf{Verification:}
+  \[
+    s^{e} \bmod n \;=\; 18^{3} \bmod 55 \;=\; 2 \;=\; m \quad \checkmark \; \text{Signature valid!}
+  \]
+\end{frame}
+
+% =====================================================
+\section{ElGamal Digital Signature}
+% =====================================================
+\begin{frame}{ElGamal Digital Signature Scheme}
+  \textbf{Key Generation}
+  \begin{enumerate}
+    \item Choose a large prime $p$ and a generator $g$ of $\mathbb{Z}_p^{*}$.
+    \item Choose private key $x$, $1 < x < p-1$.
+    \item Compute public key $y \equiv g^{x} \pmod p$.
+    \item Public key: $(p, g, y)$ \quad Private key: $x$.
+  \end{enumerate}
+  \textbf{Signing message $m$:}
+  \begin{enumerate}
+    \item Choose random $k$ with $\gcd(k, p-1) = 1$.
+    \item Compute $r \equiv g^{k} \pmod p$.
+    \item Compute $s \equiv k^{-1}(m - xr) \pmod{p-1}$.
+    \item Signature: $(r,s)$.
+  \end{enumerate}
+  \textbf{Verification:} accept if \; $g^{m} \equiv y^{r}\, r^{s} \pmod p$
+\end{frame}
+
+\begin{frame}{ElGamal Digital Signature -- Small Example}
+  \textbf{Key Generation}
+  \begin{align*}
+    p = 23, \quad g = 5, \quad x = 6 \;(\text{private})\\
+    y \equiv g^{x} \bmod p = 5^{6} \bmod 23 = 8 \;(\text{public})
+  \end{align*}
+  Public key $(p,g,y) = (23,5,8)$, \quad Private key $x = 6$
+
+  \textbf{Signing message} $m = 10$, choose $k = 3$ $(\gcd(3,22)=1)$:
+  \begin{align*}
+    r &\equiv g^{k} \bmod p = 5^{3} \bmod 23 = 10 \\
+    s &\equiv k^{-1}(m - xr) \bmod (p-1) = 15 \times (10 - 60) \bmod 22 = 20
+  \end{align*}
+  Signature: $(r,s) = (10, 20)$
+
+  \textbf{Verification:}
+  \[
+    g^{m} \bmod p = 5^{10} \bmod 23 = 9, \qquad
+    y^{r} r^{s} \bmod p = 8^{10}\times 10^{20} \bmod 23 = 9
+  \]
+  Both sides equal $9$ \; $\checkmark$ \; Signature valid!
 \end{frame}
 
 \end{document}

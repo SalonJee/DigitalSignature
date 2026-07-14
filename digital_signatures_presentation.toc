@@ -1,6 +1,6 @@
-\beamer@sectionintoc {1}{Motivation}{3}{0}{1}
-\beamer@sectionintoc {2}{Number Theory Toolkit}{4}{0}{2}
-\beamer@sectionintoc {3}{RSA Signatures}{7}{0}{3}
-\beamer@sectionintoc {4}{Discrete-Log Signatures}{11}{0}{4}
-\beamer@sectionintoc {5}{Applications}{13}{0}{5}
-\beamer@sectionintoc {6}{Conclusion}{14}{0}{6}
+\beamer@sectionintoc {1}{Introduction}{3}{0}{1}
+\beamer@sectionintoc {2}{Applications}{5}{0}{2}
+\beamer@sectionintoc {3}{General Flowchart}{7}{0}{3}
+\beamer@sectionintoc {4}{Workflow}{9}{0}{4}
+\beamer@sectionintoc {5}{RSA Digital Signature}{11}{0}{5}
+\beamer@sectionintoc {6}{ElGamal Digital Signature}{14}{0}{6}
